@@ -1,16 +1,10 @@
-use lazy_static::lazy_static;
-use std::collections::HashMap;
 use std::env;
-use std::fs;
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::Mutex;
-use std::{thread, time};
+use std::process::{Command};
 use colored::Colorize;
-use foreach::for_each;
 
-fn exec(command: &str, print_command: bool) -> String {
+
+fn exec(command: &str, print_command: bool) -> String{
     if print_command{
         println!("{} `{}`", "[rsbuild]".bold().yellow(), command);
     }
@@ -19,70 +13,42 @@ fn exec(command: &str, print_command: bool) -> String {
         .arg(command)
         .output()
         .expect("failed to execute process");
-    let mut s = String::from_utf8(output.stdout).unwrap();
+    // let mut s = String::from_utf8(output.stdout).unwrap();
     // io::stdout().write_all(s.as_bytes()).unwrap();
-    s.pop();
-    return s;
+    // s.pop();
+    // return s;
+    let mut output_str = String::from_utf8(output.stdout).unwrap();
+    let mut error_str = String::from_utf8(output.stderr).unwrap();
+    output_str = output_str.replace("[output] ", "").replace("[rsbuild] ", "");
+    error_str = error_str.replace("[error] ", "").replace("[rsbuild] ", "");
+    io::stdout().write_all(format!("{} {}", "[output]".bold().blue(), output_str).as_bytes());
+    io::stderr().write_all(format!("{} {}", "[error]".bold().red(), error_str).as_bytes());
+    return output_str;
 }
 
 fn help() {
-    let s = "Usage:  zc [OPTIONS] COMMAND
+    let s = "Usage:  rsbuild COMMAND [OPTIONS]
 
-A self-sufficient runtime for zakuro
+A self-sufficient runtime to build projects.
 
-Commands:
-    restart         Restart the zakuro service
-    *build           Build the image attached to the context (multi-platform)
-    *build_vanilla   Build the vanilla image attached to the context (multi-platform)
-    add_worker      Add a worker to the network
-    down            Stop the container
-    up              Start the container
-    logs            Fetch the logs of master node
-    pull            Pull the latest zakuro version
-    test_network    Test the zakuro network
-    =============
-    *commit         Create a new image from a container's changes
-    *cp             Copy files/folders between a container and the local filesystem
-    *create         Create a new container
-    *exec           Run a command in a running container
-    *export         Export a container's filesystem as a tar archive
-    *images         List images
-    *info           Display system-wide information
-    *kill           Kill one or more running containers
-    *push           Push an image or a repository to a registry
-    restart         Restart the zakuro service
-    *rm             Remove one or more containers
-    *start          Start one or more stopped containers
-    *stop           Stop one or more running containers
-    *version        Show the Docker version information
+COMMAND:
+    clean         N/A
+    build         N/A
+    pull          N/A
 
-Run 'zc COMMAND --help' for more information on a command.
+OPTIONS:
+    wheel         N/A
+    vanilla       N/A
+    sandbox       N/A
+    release       N/A
+    debug         N/A
 
-To get more help with docker, check out our guides at https://docs.zakuro.ai/go/guides/
+
+Run 'rsbuild' for more information on a command.
+
+To get more help with docker, check out our guides at https://docs.rsbuild.com/guides/
 ";
-    let _stemp ="
-============Options:
-        --config string      Location of client config files (default \"/Users/jcadic/.config/zakuro\")
-    -c, --context string     Name of the context to use to connect to the daemon (overrides DOCKER_HOST env var and default context set with \"docker context use\")
-    -D, --debug              Enable debug mode
-    -H, --host list          Daemon socket(s) to connect to
-    -v, --version            Print version information and quit
-
-Management Commands:
-=============
-    *builder     Manage builds
-    *config      Manage Docker configs
-    *context     Manage contexts
-    *network     Manage networks
-    *node        Manage Swarm nodes
-    *secret      Manage Docker secrets
-    *service     Manage services
-    *system      Manage Docker
-    *trust       Manage trust on Docker images
-    *volume      Manage volumes
-
-";
-    io::stdout().write_all(s.as_bytes());
+    io::stdout().write_all(s.as_bytes()).unwrap();
 }
 
 fn cargo_build_release(){
@@ -90,6 +56,14 @@ fn cargo_build_release(){
     let s1 = exec("uname -m ", false);
     let target_dir = format!("target/{}/{}", s, s1);
     let cmd = format!("cargo build --release --target-dir {}", target_dir);
+    println!("{}", exec(&cmd, true));
+}
+
+fn cargo_build_debug(){
+    let s = exec("uname", false);
+    let s1 = exec("uname -m ", false);
+    let target_dir = format!("target/{}/{}", s, s1);
+    let cmd = format!("cargo build --debug --target-dir {}", target_dir);
     println!("{}", exec(&cmd, true));
 }
 
@@ -114,20 +88,97 @@ fn build_wheel(){
         "rsbuild clean"
     ]);
 }
+
+fn build_vanilla(){
+    _exec_commands(vec![
+        "docker compose build vanilla",
+    ]);
+}
+
+fn build_sandbox(){
+    _exec_commands(vec![
+        "docker compose build sandbox",
+    ]);
+}
+fn build(){
+    _exec_commands(vec![
+        "rsbuild build wheel",
+        "rsbuild build vanilla",
+        "rsbuild build sandbox"
+    ]);
+}
+
+fn pull(){
+    _exec_commands(vec![
+        "rsbuild pull vanilla",
+        "rsbuild pull sandbox",
+    ]);
+}
+fn pull_vanilla(){
+    _exec_commands(vec!["docker compose pull vanilla"]);
+}
+fn pull_sandbox(){
+    _exec_commands(vec!["docker compose pull sandbox"]);
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     match args.len() {
         2 =>{
             let arg0 = &args[1];
             match &arg0[..] {
-                "cargo_release" => cargo_build_release(),
                 "help" => help(),
-                "build_wheel" => build_wheel(),
+                "glances" => println!("{}", exec("glances", true)),
+                "build" => build(),
+                "pull" => pull(),
                 "clean" => clean(),
                 _ =>help()
             }
         }
-        _ =>help()
+        3=>{
+            let arg0 = &args[1];
+            let arg1 = &args[2];
+            match &arg0[..] {
+                "build" => {
+                    match &arg1[..]{
+                        "wheel" => build_wheel(),
+                        "vanilla" => build_vanilla(),
+                        "sandbox" => build_sandbox(),
+                        "debug" => cargo_build_debug(),
+                        "release" => cargo_build_release(),
+                        _=>help()
+                    }
+                }               
+                "pull" => {
+                    match &arg1[..]{
+                        "vanilla" => pull_vanilla(),
+                        "sandbox" => pull_sandbox(),
+                        _=>help()
+                    }
+                }
+                _ =>help()
+            }
+        }
+        4=>{
+            let arg0 = &args[1];
+            let arg1 = &args[2];
+            let arg2 = &args[3];
+            match &arg0[..] {
+                "build" => {
+                    match &arg1[..]{
+                        "cargo" => {
+                            match &arg2[..]{
+                                "debug" => cargo_build_debug(),
+                                "release" => cargo_build_release(),
+                                _=>help()
+                            }
+                        }
+                        _=>help()
+                    }
+                }     
+                _=>help()
+            }
+        }
+        _=>help()
     }
-    println!("Exit...");
 }
