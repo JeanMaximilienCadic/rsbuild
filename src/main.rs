@@ -124,10 +124,10 @@ fn main() {
                 "help" => help(),
                 "build_wheel" => build_wheel(),
                 "clean" => clean(),
-                _ =>{}
+                _ =>help()
             }
         }
-        _ =>{}
+        _ =>help()
     }
     println!("Exit...");
 }
