@@ -123,6 +123,7 @@ fn main() {
                 "cargo_release" => cargo_build_release(),
                 "help" => help(),
                 "build_wheel" => build_wheel(),
+                "clean" => clean(),
                 _ =>{}
             }
         }
