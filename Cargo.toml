@@ -1,6 +1,6 @@
 [package]
 name = "rsbuild"
-version = "0.1.2"
+version = "0.1.10"
 edition = "2021"
 license = "MIT"
 description = "Tool to build projects."

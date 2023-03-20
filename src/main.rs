@@ -1,18 +1,28 @@
 use std::env;
 use std::io::{self, Write};
-use std::process::{Command};
+use std::process::{Command,Output};
 use colored::Colorize;
 
+fn read_output(command: &str)-> Output{
+    return Command::new("sh")
+    .arg("-c")
+    .arg(command)
+    .output()
+    .expect("failed to execute process");
+    
+}
+fn read_output_str(command: &str)-> String{
+    let output = read_output(command);
+    let mut output_str = String::from_utf8(output.stdout).unwrap();
+    output_str.pop();
+    return output_str;
+}
 
 fn exec(command: &str, print_command: bool) -> String{
     if print_command{
         println!("{} `{}`", "[rsbuild]".bold().yellow(), command);
     }
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .output()
-        .expect("failed to execute process");
+    let output = read_output(command);   
     // let mut s = String::from_utf8(output.stdout).unwrap();
     // io::stdout().write_all(s.as_bytes()).unwrap();
     // s.pop();
@@ -21,9 +31,15 @@ fn exec(command: &str, print_command: bool) -> String{
     let mut error_str = String::from_utf8(output.stderr).unwrap();
     output_str = output_str.replace("[output] ", "").replace("[rsbuild] ", "");
     error_str = error_str.replace("[error] ", "").replace("[rsbuild] ", "");
-    io::stdout().write_all(format!("{} {}", "[output]".bold().blue(), output_str).as_bytes());
-    io::stderr().write_all(format!("{} {}", "[error]".bold().red(), error_str).as_bytes());
-    return output_str;
+    let output_str2 = format!("{} {}", "[output]".bold().blue(), output_str);
+    let error_str2 = format!("{} {}", "[error]".bold().red(), error_str);
+    if output_str.len()>0 && print_command{
+        io::stdout().write_all(output_str2.as_bytes()).unwrap();
+    }
+    if error_str.len()>0 && print_command{
+        io::stderr().write_all(error_str2.as_bytes()).unwrap();
+    }        
+    return output_str2;
 }
 
 fn help() {
@@ -51,20 +67,18 @@ To get more help with docker, check out our guides at https://docs.rsbuild.com/g
     io::stdout().write_all(s.as_bytes()).unwrap();
 }
 
+fn cargo_build_arg(arg: &str){
+    let target_dir = format!("target/{}/{}", read_output_str("uname"), read_output_str("uname -m"));
+    let cmd = format!("cargo build {} --target-dir {}", arg, target_dir);
+    exec(&cmd, true);
+}
 fn cargo_build_release(){
-    let s = exec("uname", false);
-    let s1 = exec("uname -m ", false);
-    let target_dir = format!("target/{}/{}", s, s1);
-    let cmd = format!("cargo build --release --target-dir {}", target_dir);
-    println!("{}", exec(&cmd, true));
+    cargo_build_arg("--release");
 }
 
 fn cargo_build_debug(){
-    let s = exec("uname", false);
-    let s1 = exec("uname -m ", false);
-    let target_dir = format!("target/{}/{}", s, s1);
-    let cmd = format!("cargo build --debug --target-dir {}", target_dir);
-    println!("{}", exec(&cmd, true));
+    cargo_build_arg("");
+
 }
 
 fn _exec_commands(commands: Vec<&str>){
@@ -73,33 +87,30 @@ fn _exec_commands(commands: Vec<&str>){
     };
 }
 fn clean(){
-    _exec_commands(vec![
+    for command in &vec![
         "rm -r build",
         "rm -r $(find . -type d -iname *egg-info*)",
         "rm -r $(find . -type d -iname *pycache*)",
         "rm -r $(find . -type d -iname *.ipynb_checkpoints*)",
-    ]);
+    ] {
+        exec(command, false);
+    };
 }
 
 fn build_wheel(){
+    exec("mv dist/*.whl dist/legacy", false);
     _exec_commands(vec![
-        "mv dist/*.whl dist/legacy",
         "pip wheel . -w dist --no-deps",
         "rsbuild clean"
     ]);
 }
 
-fn build_vanilla(){
+fn build_docker_compose(v:&str){
     _exec_commands(vec![
-        "docker compose build vanilla",
+        &format!("docker compose build {}",v)
     ]);
 }
 
-fn build_sandbox(){
-    _exec_commands(vec![
-        "docker compose build sandbox",
-    ]);
-}
 fn build(){
     _exec_commands(vec![
         "rsbuild build wheel",
@@ -120,6 +131,28 @@ fn pull_vanilla(){
 fn pull_sandbox(){
     _exec_commands(vec!["docker compose pull sandbox"]);
 }
+fn cython(pkg: &str){
+    let build_dir = format!("/tmp/bin/._rsbuild-{}", pkg);
+    exec(&format!("rm -r {}", build_dir), false);
+    exec(&format!("mkdir -p {}/dist/legacy", build_dir), false);
+    exec(&format!("cp requirements.txt {}", build_dir), false);
+    exec(&format!("cp setup.cfg {}", build_dir), false);
+    exec(&format!("cp setup.py {}",build_dir), false);
+    _exec_commands(vec![
+        &format!("cythonize -a -i {}", pkg),
+        "rsbuild clean",
+        &format!("rm $(find ./{} -type f -iname *.c)", pkg),
+        &format!("find {} -type f -iname *.so >so_files", pkg),
+        &format!("rsync -av --files-from=so_files ./ {}", build_dir),
+        &format!("rm $(find ./{} -type f -iname *.so)", pkg),
+        &format!("cd {} && rsbuild build wheel", build_dir),
+        "rsbuild clean",
+        "rm so_files",
+        ]);
+    exec("rm $(find . -type f -iname *.html)", false);
+    exec(&format!("mv {}/dist/*.whl dist/", build_dir), false);
+    exec(&format!("rm -r {}", build_dir), false);
+    }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -132,7 +165,9 @@ fn main() {
                 "build" => build(),
                 "pull" => pull(),
                 "clean" => clean(),
-                _ =>help()
+                _ =>{
+                    exec(&arg0[..], true);
+                }
             }
         }
         3=>{
@@ -142,11 +177,9 @@ fn main() {
                 "build" => {
                     match &arg1[..]{
                         "wheel" => build_wheel(),
-                        "vanilla" => build_vanilla(),
-                        "sandbox" => build_sandbox(),
                         "debug" => cargo_build_debug(),
                         "release" => cargo_build_release(),
-                        _=>help()
+                        _ => build_docker_compose(&arg1[..]),
                     }
                 }               
                 "pull" => {
@@ -156,6 +189,7 @@ fn main() {
                         _=>help()
                     }
                 }
+                "cython" => cython(&arg1[..]),
                 _ =>help()
             }
         }
@@ -172,7 +206,7 @@ fn main() {
                                 "release" => cargo_build_release(),
                                 _=>help()
                             }
-                        }
+                        }   
                         _=>help()
                     }
                 }     
