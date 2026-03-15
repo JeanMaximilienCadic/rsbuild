@@ -29,35 +29,41 @@ jobs:
       - name: Check and bump version if needed
         id: version
         run: |
+          set -e
+
           # Get current version from Cargo.toml
           CURRENT_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
           echo "Current version in Cargo.toml: $CURRENT_VERSION"
 
-          # Get latest version from crates.io
-          CRATES_RESPONSE=$(curl -s "https://crates.io/api/v1/crates/rsbuild" || echo '{}')
-          LATEST_CRATES_VERSION=$(echo "$CRATES_RESPONSE" | grep -o '"newest_version":"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"/\1/' || echo "0.0.0")
-          echo "Latest version on crates.io: $LATEST_CRATES_VERSION"
+          # Use cargo search to check if version exists (more reliable than crates.io API)
+          # Note: cargo search returns latest version only, so we'll also try cargo info
+          SEARCH_RESULT=$(cargo search rsbuild --limit 1 2>/dev/null || echo "")
+          echo "Cargo search result: $SEARCH_RESULT"
 
-          # Function to compare semver versions
-          version_gt() {
-            test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
+          # Extract version from search result (format: rsbuild = "0.2.0")
+          CRATES_VERSION=$(echo "$SEARCH_RESULT" | grep -oP 'rsbuild = "\K[^"]+' || echo "")
+          echo "Latest version on crates.io: ${CRATES_VERSION:-not found}"
+
+          # Function to check if current version is less than or equal to crates version
+          version_lte() {
+            [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
           }
 
-          # If current version exists on crates.io, bump it
-          if curl -s "https://crates.io/api/v1/crates/rsbuild/$CURRENT_VERSION" | grep -q '"version"'; then
-            echo "Version $CURRENT_VERSION already exists on crates.io, bumping..."
+          NEED_BUMP=false
 
-            # Parse and bump patch version
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          # If crates version exists and current version is <= crates version, we need to bump
+          if [ -n "$CRATES_VERSION" ]; then
+            if version_lte "$CURRENT_VERSION" "$CRATES_VERSION"; then
+              echo "Current version $CURRENT_VERSION is <= crates.io version $CRATES_VERSION, bumping..."
+              NEED_BUMP=true
+            fi
+          fi
+
+          if [ "$NEED_BUMP" = "true" ]; then
+            # Start from crates version and bump patch
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CRATES_VERSION"
             NEW_PATCH=$((PATCH + 1))
             NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-
-            # Check if new version also exists, keep bumping if needed
-            while curl -s "https://crates.io/api/v1/crates/rsbuild/$NEW_VERSION" | grep -q '"version"'; do
-              echo "Version $NEW_VERSION also exists, bumping again..."
-              NEW_PATCH=$((NEW_PATCH + 1))
-              NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
-            done
 
             echo "New version will be: $NEW_VERSION"
 
@@ -67,7 +73,7 @@ jobs:
             echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
             echo "bumped=true" >> $GITHUB_OUTPUT
           else
-            echo "Version $CURRENT_VERSION does not exist on crates.io, using it"
+            echo "Version $CURRENT_VERSION is new, using it"
             echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
             echo "bumped=false" >> $GITHUB_OUTPUT
           fi
@@ -89,7 +95,9 @@ jobs:
         run: cargo test
 
       - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CRATES_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: cargo publish
 
       - name: Create and push tag
         run: |
