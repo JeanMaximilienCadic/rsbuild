@@ -1,10 +1,25 @@
 [package]
 name = "rsbuild"
-version = "0.1.10"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
-description = "Tool to build projects."
+description = "A self-sufficient runtime to build projects"
+repository = "https://github.com/JeanMaximilienCadic/rsbuild"
+keywords = ["build", "docker", "wheel", "cython", "automation"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+authors = ["Jean Maximilien Cadic"]
+
+[[bin]]
+name = "rsbuild"
+path = "src/main.rs"
 
 [dependencies]
-colored = "2.0.0"
-command-macros = "0.2.9"
+clap = { version = "4", features = ["derive"] }
+colored = "2"
+thiserror = "1"
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
