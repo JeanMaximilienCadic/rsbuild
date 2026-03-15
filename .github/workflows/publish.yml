@@ -36,12 +36,13 @@ jobs:
           echo "Current version in Cargo.toml: $CURRENT_VERSION"
 
           # Use cargo search to check if version exists (more reliable than crates.io API)
-          # Note: cargo search returns latest version only, so we'll also try cargo info
-          SEARCH_RESULT=$(cargo search rsbuild --limit 1 2>/dev/null || echo "")
+          # Disable colors to get clean output
+          SEARCH_RESULT=$(CARGO_TERM_COLOR=never cargo search rsbuild --limit 1 2>/dev/null || echo "")
           echo "Cargo search result: $SEARCH_RESULT"
 
-          # Extract version from search result (format: rsbuild = "0.2.0")
-          CRATES_VERSION=$(echo "$SEARCH_RESULT" | grep -oP 'rsbuild = "\K[^"]+' || echo "")
+          # Strip any ANSI codes and extract version from search result (format: rsbuild = "0.2.0")
+          CLEAN_RESULT=$(echo "$SEARCH_RESULT" | sed 's/\x1b\[[0-9;]*m//g')
+          CRATES_VERSION=$(echo "$CLEAN_RESULT" | grep -oP 'rsbuild = "\K[^"]+' || echo "")
           echo "Latest version on crates.io: ${CRATES_VERSION:-not found}"
 
           # Function to check if current version is less than or equal to crates version
