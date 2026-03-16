@@ -1,15 +1,35 @@
-use clap::{Parser, Subcommand};
+//! Command-line interface definitions.
 
+use clap::{Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
+
+/// A self-sufficient runtime to build projects.
+///
+/// rsbuild provides commands for building Python wheels, Docker containers,
+/// Rust binaries, and managing Cython compilation workflows.
 #[derive(Parser)]
 #[command(name = "rsbuild")]
-#[command(author = "Jean Maximilien Cadic")]
 #[command(version)]
-#[command(about = "A self-sufficient runtime to build projects", long_about = None)]
+#[command(about, long_about = None)]
+#[command(propagate_version = true)]
 pub struct Cli {
+    /// Increase output verbosity
+    #[arg(short, long, global = true)]
+    pub verbose: bool,
+
+    /// Suppress non-essential output
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
+
+    /// Preview commands without executing them
+    #[arg(long, global = true)]
+    pub dry_run: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
 
+/// Available commands.
 #[derive(Subcommand)]
 pub enum Commands {
     /// Build artifacts (wheel, docker, cargo)
@@ -18,16 +38,30 @@ pub enum Commands {
         target: BuildTarget,
     },
 
-    /// Pull docker images
+    /// Pull Docker images
     Pull {
         #[command(subcommand)]
         target: PullTarget,
     },
 
-    /// Clean build artifacts
-    Clean,
+    /// Run Docker Compose services
+    Run {
+        /// Service name to run
+        service: String,
 
-    /// Compile Cython modules
+        /// Additional arguments to pass to docker compose run
+        #[arg(trailing_var_arg = true)]
+        args: Vec<String>,
+    },
+
+    /// Clean build artifacts and caches
+    Clean {
+        /// Also remove Rust target directory
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Compile Cython modules and package into wheel
     Cython {
         /// Package name to compile
         package: String,
@@ -36,55 +70,90 @@ pub enum Commands {
     /// Run glances system monitor
     Glances,
 
+    /// Generate shell completion scripts
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
+
+    /// Check if required tools are installed
+    Doctor,
+
     /// Execute arbitrary shell command
     #[command(external_subcommand)]
     External(Vec<String>),
 }
 
+/// Build targets for the build command.
 #[derive(Subcommand)]
 pub enum BuildTarget {
-    /// Build Python wheel
+    /// Build Python wheel using pip
     Wheel,
 
-    /// Build all targets (wheel, vanilla, sandbox)
+    /// Build all configured targets
     All,
 
-    /// Build vanilla Docker container
-    Vanilla,
-
-    /// Build sandbox Docker container
-    Sandbox,
-
-    /// Build Rust binary
+    /// Build Rust binary with cargo
     Cargo {
-        #[command(subcommand)]
+        /// Build mode
+        #[arg(value_enum, default_value = "release")]
         mode: CargoBuildMode,
     },
 
     /// Build a Docker Compose service
     Docker {
-        /// Service name
+        /// Service name (e.g., vanilla, sandbox, or any service in docker-compose.yml)
         service: String,
+
+        /// Build without cache
+        #[arg(long)]
+        no_cache: bool,
     },
 }
 
-#[derive(Subcommand)]
+/// Cargo build modes.
+#[derive(Clone, Debug, ValueEnum)]
 pub enum CargoBuildMode {
-    /// Build in debug mode
+    /// Debug build (faster compilation, slower runtime)
     Debug,
-
-    /// Build in release mode
+    /// Release build (optimized, slower compilation)
     Release,
 }
 
+/// Pull targets for the pull command.
 #[derive(Subcommand)]
 pub enum PullTarget {
-    /// Pull all images
+    /// Pull all configured images
     All,
 
-    /// Pull vanilla image
-    Vanilla,
+    /// Pull a specific Docker Compose service image
+    Service {
+        /// Service name from docker-compose.yml
+        name: String,
+    },
+}
 
-    /// Pull sandbox image
-    Sandbox,
+/// Execution context passed to commands.
+#[derive(Clone, Copy)]
+pub struct ExecContext {
+    pub verbose: bool,
+    pub quiet: bool,
+    pub dry_run: bool,
+}
+
+impl ExecContext {
+    /// Create context from CLI flags.
+    pub fn from_cli(cli: &Cli) -> Self {
+        Self {
+            verbose: cli.verbose,
+            quiet: cli.quiet,
+            dry_run: cli.dry_run,
+        }
+    }
+
+    /// Check if output should be shown.
+    pub fn should_print(&self) -> bool {
+        !self.quiet
+    }
 }

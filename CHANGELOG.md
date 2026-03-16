@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-16
+
+### Added
+
+- `--dry-run` global flag to preview commands without executing
+- `--verbose` and `--quiet` global flags for output control
+- `doctor` command to check system for required tools
+- `completions` command to generate shell completions (bash, zsh, fish, etc.)
+- `run` command to execute Docker Compose services
+- `--no-cache` flag for docker builds
+- `--all` flag for clean command to also remove Rust target
+- Tool existence checks with helpful installation hints
+- Documentation comments throughout codebase
+- `which` crate for reliable tool detection
+
+### Changed
+
+- Removed PII (author name) from Cargo.toml and CLI metadata
+- Improved error messages with command, exit code, and error details
+- Refactored executor module with better output handling
+- Build commands now show status messages
+- Docker service names are now configurable (not hardcoded)
+- Pull command now uses `pull service <name>` for specific services
+- Cargo build defaults to release mode
+- Cython command validates package directory exists
+
+### Fixed
+
+- Clean command patterns for better artifact removal
+
 ## [0.2.0] - 2026-03-16
 
 ### Added
@@ -36,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic build, clean, pull, and cython commands
 - Colored console output
 
-[Unreleased]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/JeanMaximilienCadic/rsbuild/releases/tag/v0.1.10
