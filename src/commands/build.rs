@@ -2,7 +2,7 @@
 
 use crate::cli::{BuildTarget, CargoBuildMode, ExecContext};
 use crate::error::Result;
-use crate::executor::{check_tool, exec, exec_commands, exec_ignore_error, print_status, read_output_str};
+use crate::executor::{check_tool, exec, exec_ignore_error, print_status, read_output_str};
 
 /// Execute the build command.
 pub fn run(target: BuildTarget, ctx: &ExecContext) -> Result<()> {
@@ -40,23 +40,23 @@ fn cargo_build(mode: CargoBuildMode, ctx: &ExecContext) -> Result<()> {
     Ok(())
 }
 
-/// Build a Python wheel.
+/// Build a Python wheel using uv.
 fn build_wheel(ctx: &ExecContext) -> Result<()> {
-    check_tool("pip")?;
+    check_tool("uv")?;
 
-    print_status("Building Python wheel", ctx);
+    print_status("Building Python wheel with uv", ctx);
+
+    // Create dist directory if it doesn't exist
+    exec_ignore_error("mkdir -p dist/legacy", ctx);
 
     // Move existing wheels to legacy (ignore if none exist)
-    exec_ignore_error("mkdir -p dist/legacy", ctx);
     exec_ignore_error("mv dist/*.whl dist/legacy/ 2>/dev/null", ctx);
 
-    exec_commands(
-        &[
-            "pip wheel . -w dist --no-deps",
-            "rsbuild clean",
-        ],
-        ctx,
-    )?;
+    // Build wheel using uv
+    exec("uv build --wheel", ctx)?;
+
+    // Clean build artifacts
+    exec_ignore_error("rsbuild clean", ctx);
 
     print_status("Wheel built in dist/", ctx);
     Ok(())

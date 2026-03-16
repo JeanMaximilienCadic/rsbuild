@@ -34,6 +34,9 @@ fn main() -> Result<()> {
         Commands::Cython { package } => {
             commands::cython::run(&package, &ctx)?;
         }
+        Commands::Python { action } => {
+            commands::python::run(action, &ctx)?;
+        }
         Commands::Glances => {
             executor::check_tool("glances")?;
             executor::exec("glances", &ctx)?;

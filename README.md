@@ -5,7 +5,7 @@
 
 A self-sufficient runtime to build projects.
 
-rsbuild provides commands for building Python wheels, Docker containers, Rust binaries, and managing Cython compilation workflows.
+rsbuild provides commands for building Python wheels, Docker containers, Rust binaries, and managing Python project scaffolding.
 
 ## Installation
 
@@ -36,6 +36,7 @@ rsbuild [OPTIONS] <COMMAND>
 | `-v, --verbose` | Increase output verbosity |
 | `-q, --quiet` | Suppress non-essential output |
 | `--dry-run` | Preview commands without executing them |
+| `-y, --yes` | Skip confirmation prompts |
 | `-h, --help` | Print help information |
 | `-V, --version` | Print version |
 
@@ -48,14 +49,69 @@ rsbuild [OPTIONS] <COMMAND>
 | `run` | Run Docker Compose services |
 | `clean` | Clean build artifacts and caches |
 | `cython` | Compile Cython modules and package into wheel |
+| `python` | Python project management |
 | `glances` | Run glances system monitor |
 | `completions` | Generate shell completion scripts |
 | `doctor` | Check if required tools are installed |
 
-### Build Subcommands
+## Python Project Management
+
+### Initialize a New Python Project
 
 ```bash
-# Build Python wheel
+# Initialize in current directory (uses directory name as package name)
+rsbuild python init
+
+# Specify a custom package name
+rsbuild python init --name mypackage
+
+# Skip tests or devcontainer
+rsbuild python init --no-tests --no-devcontainer
+
+# Preview what would be created
+rsbuild --dry-run python init
+```
+
+This creates a complete Python project with:
+
+- `pyproject.toml` - Modern Python packaging with hatchling
+- `README.md` - Project documentation
+- `.pre-commit-config.yaml` - Pre-commit hooks (ruff, mypy)
+- `.gitignore` - Python-specific ignores
+- `Taskfile.yml` - Task runner commands (works on macOS and Linux)
+- `<package>/__init__.py` - Package with `__version__` and `__build__`
+- `<package>/tests/` - Test directory with sample test
+- `.devcontainer/` - VS Code devcontainer configuration
+- `Dockerfile` & `docker-compose.yml` - Container setup
+
+### Sync Version
+
+```bash
+# Update __version__ and __build__ in __init__.py from pyproject.toml
+rsbuild python sync-version
+```
+
+### Taskfile Commands
+
+After initializing, use these task commands:
+
+```bash
+task install      # Install dependencies with uv
+task build        # Build wheel (syncs version first)
+task test         # Run tests
+task lint         # Run linter
+task format       # Format code
+task typecheck    # Run mypy
+task clean        # Clean build artifacts
+task sync-version # Sync version from pyproject.toml
+task docker-build # Build Docker image
+task ci           # Run all CI checks
+```
+
+## Build Commands
+
+```bash
+# Build Python wheel using uv
 rsbuild build wheel
 
 # Build all configured targets
@@ -71,7 +127,7 @@ rsbuild build docker <service>
 rsbuild build docker <service> --no-cache
 ```
 
-### Pull Subcommands
+## Pull Commands
 
 ```bash
 # Pull all configured images
@@ -81,7 +137,7 @@ rsbuild pull all
 rsbuild pull service <name>
 ```
 
-### Run Docker Services
+## Run Docker Services
 
 ```bash
 # Run a Docker Compose service
@@ -91,7 +147,7 @@ rsbuild run <service>
 rsbuild run <service> -- --env FOO=bar
 ```
 
-### Clean
+## Clean
 
 ```bash
 # Remove build artifacts, egg-info, pycache, and notebook checkpoints
@@ -101,36 +157,20 @@ rsbuild clean
 rsbuild clean --all
 ```
 
-### Cython
-
-```bash
-# Compile Cython modules for a package
-rsbuild cython <package>
-```
-
-### Doctor
+## Doctor
 
 ```bash
 # Check system for required tools
 rsbuild doctor
 ```
 
-### Shell Completions
+## Shell Completions
 
 ```bash
 # Generate completions for your shell
 rsbuild completions bash > ~/.local/share/bash-completion/completions/rsbuild
 rsbuild completions zsh > ~/.zfunc/_rsbuild
 rsbuild completions fish > ~/.config/fish/completions/rsbuild.fish
-```
-
-### Dry Run Mode
-
-Preview what commands would be executed without running them:
-
-```bash
-rsbuild --dry-run build wheel
-rsbuild --dry-run clean --all
 ```
 
 ## Project Structure
@@ -148,6 +188,7 @@ src/
     ├── cython.rs     # Cython compilation
     ├── doctor.rs     # System diagnostics
     ├── pull.rs       # Docker pull commands
+    ├── python.rs     # Python project management
     └── run.rs        # Docker run command
 ```
 

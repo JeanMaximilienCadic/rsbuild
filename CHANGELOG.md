@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-16
+
+### Added
+
+- `rsbuild python init` command to scaffold Python projects with:
+  - pyproject.toml (hatchling build system)
+  - Pre-commit configuration (ruff, mypy)
+  - Taskfile.yml with common tasks (works on macOS and Linux)
+  - Package structure with `__version__` and `__build__`
+  - Tests directory with sample test
+  - Devcontainer configuration
+  - Dockerfile and docker-compose.yml
+- `rsbuild python sync-version` to sync version from pyproject.toml to package
+- `-y, --yes` global flag to skip confirmation prompts
+- Confirmation prompts before overwriting existing files
+- `uv` and `task` to doctor command checks
+
+### Changed
+
+- `rsbuild build wheel` now uses `uv build --wheel` instead of pip
+- Improved doctor command output formatting
+
 ## [0.3.0] - 2026-03-16
 
 ### Added
@@ -66,7 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic build, clean, pull, and cython commands
 - Colored console output
 
-[Unreleased]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/JeanMaximilienCadic/rsbuild/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/JeanMaximilienCadic/rsbuild/releases/tag/v0.1.10

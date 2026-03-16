@@ -25,6 +25,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub dry_run: bool,
 
+    /// Skip confirmation prompts (answer yes to all)
+    #[arg(short = 'y', long, global = true)]
+    pub yes: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -67,6 +71,12 @@ pub enum Commands {
         package: String,
     },
 
+    /// Python project management
+    Python {
+        #[command(subcommand)]
+        action: PythonAction,
+    },
+
     /// Run glances system monitor
     Glances,
 
@@ -88,7 +98,7 @@ pub enum Commands {
 /// Build targets for the build command.
 #[derive(Subcommand)]
 pub enum BuildTarget {
-    /// Build Python wheel using pip
+    /// Build Python wheel using uv
     Wheel,
 
     /// Build all configured targets
@@ -134,12 +144,35 @@ pub enum PullTarget {
     },
 }
 
+/// Python project actions.
+#[derive(Subcommand)]
+pub enum PythonAction {
+    /// Initialize a new Python project with best practices
+    Init {
+        /// Project name (defaults to current directory name)
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// Skip creating tests directory
+        #[arg(long)]
+        no_tests: bool,
+
+        /// Skip creating devcontainer
+        #[arg(long)]
+        no_devcontainer: bool,
+    },
+
+    /// Sync version from pyproject.toml to package __init__.py
+    SyncVersion,
+}
+
 /// Execution context passed to commands.
 #[derive(Clone, Copy)]
 pub struct ExecContext {
     pub verbose: bool,
     pub quiet: bool,
     pub dry_run: bool,
+    pub yes: bool,
 }
 
 impl ExecContext {
@@ -149,6 +182,7 @@ impl ExecContext {
             verbose: cli.verbose,
             quiet: cli.quiet,
             dry_run: cli.dry_run,
+            yes: cli.yes,
         }
     }
 

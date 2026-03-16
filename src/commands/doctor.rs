@@ -12,16 +12,19 @@ const REQUIRED_TOOLS: &[(&str, &str)] = &[
 ];
 
 const OPTIONAL_TOOLS: &[(&str, &str)] = &[
-    ("pip", "Python wheel builds"),
+    ("uv", "Python package management & wheel builds"),
+    ("task", "Task runner (Taskfile)"),
+    ("pip", "Python package installer (legacy)"),
     ("cythonize", "Cython compilation"),
     ("rsync", "Cython packaging"),
     ("glances", "System monitoring"),
+    ("pre-commit", "Git hooks"),
 ];
 
 /// Execute the doctor command.
 pub fn run(_ctx: &ExecContext) -> Result<()> {
     println!("{}", "rsbuild doctor".bold());
-    println!("{}", "=".repeat(40));
+    println!("{}", "=".repeat(50));
     println!();
 
     let mut all_ok = true;
@@ -29,10 +32,10 @@ pub fn run(_ctx: &ExecContext) -> Result<()> {
     println!("{}", "Required tools:".bold());
     for (tool, purpose) in REQUIRED_TOOLS {
         let status = if check_tool(tool).is_ok() {
-            format!("{}", "OK".green())
+            format!("{:>8}", "OK".green())
         } else {
             all_ok = false;
-            format!("{}", "MISSING".red())
+            format!("{:>8}", "MISSING".red())
         };
         println!("  {} {} - {}", status, tool.bold(), purpose);
     }
@@ -41,47 +44,46 @@ pub fn run(_ctx: &ExecContext) -> Result<()> {
     println!("{}", "Optional tools:".bold());
     for (tool, purpose) in OPTIONAL_TOOLS {
         let status = if check_tool(tool).is_ok() {
-            format!("{}", "OK".green())
+            format!("{:>8}", "OK".green())
         } else {
-            format!("{}", "MISSING".yellow())
+            format!("{:>8}", "MISSING".yellow())
         };
         println!("  {} {} - {}", status, tool.bold(), purpose);
     }
     println!();
 
-    // Check for docker-compose.yml
+    // Check for project files
     println!("{}", "Project files:".bold());
-    let compose_exists = std::path::Path::new("docker-compose.yml").exists()
-        || std::path::Path::new("compose.yml").exists();
-    let compose_status = if compose_exists {
-        format!("{}", "FOUND".green())
-    } else {
-        format!("{}", "NOT FOUND".yellow())
-    };
-    println!("  {} docker-compose.yml", compose_status);
 
-    let setup_exists = std::path::Path::new("setup.py").exists()
-        || std::path::Path::new("pyproject.toml").exists();
-    let setup_status = if setup_exists {
-        format!("{}", "FOUND".green())
-    } else {
-        format!("{}", "NOT FOUND".yellow())
-    };
-    println!("  {} setup.py/pyproject.toml", setup_status);
+    let files_to_check = [
+        ("docker-compose.yml", vec!["docker-compose.yml", "compose.yml"]),
+        ("pyproject.toml", vec!["pyproject.toml", "setup.py"]),
+        ("Cargo.toml", vec!["Cargo.toml"]),
+        ("Taskfile.yml", vec!["Taskfile.yml", "Taskfile.yaml", "taskfile.yml"]),
+        (".pre-commit-config.yaml", vec![".pre-commit-config.yaml"]),
+    ];
 
-    let cargo_exists = std::path::Path::new("Cargo.toml").exists();
-    let cargo_status = if cargo_exists {
-        format!("{}", "FOUND".green())
-    } else {
-        format!("{}", "NOT FOUND".yellow())
-    };
-    println!("  {} Cargo.toml", cargo_status);
+    for (label, paths) in files_to_check {
+        let found = paths.iter().any(|p| std::path::Path::new(p).exists());
+        let status = if found {
+            format!("{:>8}", "FOUND".green())
+        } else {
+            format!("{:>8}", "NOT FOUND".yellow())
+        };
+        println!("  {} {}", status, label);
+    }
     println!();
 
     if all_ok {
         println!("{}", "All required tools are installed!".green().bold());
     } else {
         println!("{}", "Some required tools are missing.".red().bold());
+        println!();
+        println!("Installation hints:");
+        println!("  cargo:  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh");
+        println!("  docker: https://docs.docker.com/get-docker/");
+        println!("  uv:     curl -LsSf https://astral.sh/uv/install.sh | sh");
+        println!("  task:   https://taskfile.dev/installation/");
     }
 
     Ok(())

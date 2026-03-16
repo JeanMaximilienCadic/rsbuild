@@ -3,7 +3,7 @@
 use crate::cli::ExecContext;
 use crate::error::{Result, RsbuildError};
 use colored::Colorize;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::process::{Command, Output};
 
 /// Prefix used for rsbuild output messages.
@@ -27,6 +27,8 @@ fn get_install_hint(tool: &str) -> String {
         "docker" => "Install Docker: https://docs.docker.com/get-docker/".to_string(),
         "cargo" => "Install Rust: https://rustup.rs/".to_string(),
         "pip" => "Install pip: https://pip.pypa.io/en/stable/installation/".to_string(),
+        "uv" => "Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh".to_string(),
+        "task" => "Install Task: https://taskfile.dev/installation/".to_string(),
         "cythonize" => "Install Cython: pip install cython".to_string(),
         "rsync" => "Install rsync using your package manager".to_string(),
         "glances" => "Install glances: pip install glances".to_string(),
@@ -157,4 +159,46 @@ pub fn print_warning(message: &str, ctx: &ExecContext) {
     if ctx.should_print() {
         eprintln!("{} {}", "[warning]".bold().yellow(), message);
     }
+}
+
+/// Prompt user for confirmation.
+/// Returns true if user confirms, false otherwise.
+/// If ctx.yes is true, automatically returns true.
+pub fn confirm(message: &str, ctx: &ExecContext) -> bool {
+    if ctx.yes || ctx.dry_run {
+        return true;
+    }
+
+    print!("{} {} [y/N] ", PREFIX_RSBUILD.bold().cyan(), message);
+    io::stdout().flush().ok();
+
+    let stdin = io::stdin();
+    let mut line = String::new();
+    if stdin.lock().read_line(&mut line).is_ok() {
+        let response = line.trim().to_lowercase();
+        return response == "y" || response == "yes";
+    }
+
+    false
+}
+
+/// Prompt user for confirmation to overwrite a file.
+/// Returns true if file doesn't exist, user confirms, or ctx.yes is true.
+pub fn confirm_overwrite(path: &std::path::Path, ctx: &ExecContext) -> bool {
+    if !path.exists() {
+        return true;
+    }
+
+    if ctx.yes || ctx.dry_run {
+        if ctx.should_print() {
+            println!(
+                "{} Overwriting: {}",
+                PREFIX_RSBUILD.bold().yellow(),
+                path.display()
+            );
+        }
+        return true;
+    }
+
+    confirm(&format!("Overwrite {}?", path.display()), ctx)
 }
