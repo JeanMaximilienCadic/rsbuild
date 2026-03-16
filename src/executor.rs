@@ -2,9 +2,12 @@
 
 use crate::cli::ExecContext;
 use crate::error::{Result, RsbuildError};
+use crate::output::CommandResult;
+use crate::progress::{self, finish_error, finish_success};
 use colored::Colorize;
 use std::io::{self, BufRead, Write};
 use std::process::{Command, Output};
+use std::time::Instant;
 
 /// Prefix used for rsbuild output messages.
 const PREFIX_RSBUILD: &str = "[rsbuild]";
@@ -70,8 +73,8 @@ pub fn exec(command: &str, ctx: &ExecContext) -> Result<String> {
         return Ok(String::new());
     }
 
-    // Print command being executed
-    if ctx.should_print() {
+    // Print command being executed (only in human mode)
+    if ctx.should_print() && !ctx.is_json() {
         println!("{} `{}`", PREFIX_RSBUILD.bold().yellow(), command);
     }
 
@@ -89,8 +92,8 @@ pub fn exec(command: &str, ctx: &ExecContext) -> Result<String> {
         .replace(&format!("{} ", PREFIX_ERROR), "")
         .replace(&format!("{} ", PREFIX_RSBUILD), "");
 
-    // Print output if not quiet
-    if ctx.should_print() || ctx.verbose {
+    // Print output if not quiet and not in JSON mode
+    if (ctx.should_print() || ctx.verbose) && !ctx.is_json() {
         if !stdout_clean.is_empty() {
             let formatted = format!("{} {}", PREFIX_OUTPUT.bold().blue(), stdout_clean);
             io::stdout().write_all(formatted.as_bytes())?;
@@ -111,6 +114,79 @@ pub fn exec(command: &str, ctx: &ExecContext) -> Result<String> {
     }
 
     Ok(stdout_clean)
+}
+
+/// Execute a command with a progress spinner.
+/// Returns the command result including timing information.
+pub fn exec_with_progress(
+    command: &str,
+    ctx: &ExecContext,
+    message: impl Into<String>,
+) -> Result<String> {
+    let msg = message.into();
+    let spinner = progress::create_spinner(ctx, &msg);
+
+    let start = Instant::now();
+    let result = exec_internal(command, ctx);
+    let duration = start.elapsed();
+
+    match &result {
+        Ok(_) => {
+            finish_success(spinner, format!("{} ({:.2}s)", msg, duration.as_secs_f64()));
+        }
+        Err(e) => {
+            finish_error(spinner, format!("{}: {}", msg, e));
+        }
+    }
+
+    result
+}
+
+/// Internal exec without printing (for use with progress).
+fn exec_internal(command: &str, ctx: &ExecContext) -> Result<String> {
+    if ctx.dry_run {
+        return Ok(String::new());
+    }
+
+    let output = read_output(command)?;
+    let status = output.status;
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let stderr = String::from_utf8(output.stderr)?;
+
+    // Clean output
+    let stdout_clean = stdout
+        .replace(&format!("{} ", PREFIX_OUTPUT), "")
+        .replace(&format!("{} ", PREFIX_RSBUILD), "");
+    let stderr_clean = stderr
+        .replace(&format!("{} ", PREFIX_ERROR), "")
+        .replace(&format!("{} ", PREFIX_RSBUILD), "");
+
+    if !status.success() {
+        return Err(RsbuildError::CommandFailed {
+            command: command.to_string(),
+            code: status.code().unwrap_or(-1),
+            message: stderr_clean.lines().next().unwrap_or("Unknown error").to_string(),
+        });
+    }
+
+    Ok(stdout_clean)
+}
+
+/// Execute a command and return a CommandResult for JSON output.
+pub fn exec_for_json(command: &str, ctx: &ExecContext) -> CommandResult {
+    let start = Instant::now();
+    let result = exec_internal(command, ctx);
+    let duration = start.elapsed();
+
+    match result {
+        Ok(output) => CommandResult::success(
+            command,
+            duration,
+            if output.is_empty() { None } else { Some(output) },
+        ),
+        Err(e) => CommandResult::failed(command, duration, e.to_string()),
+    }
 }
 
 /// Execute a command silently (no output unless error).
@@ -149,14 +225,14 @@ pub fn exec_ignore_error(command: &str, ctx: &ExecContext) {
 
 /// Print a status message.
 pub fn print_status(message: &str, ctx: &ExecContext) {
-    if ctx.should_print() {
+    if ctx.should_print() && !ctx.is_json() {
         println!("{} {}", PREFIX_RSBUILD.bold().green(), message);
     }
 }
 
 /// Print a warning message.
 pub fn print_warning(message: &str, ctx: &ExecContext) {
-    if ctx.should_print() {
+    if ctx.should_print() && !ctx.is_json() {
         eprintln!("{} {}", "[warning]".bold().yellow(), message);
     }
 }

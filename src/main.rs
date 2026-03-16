@@ -7,6 +7,10 @@ mod cli;
 mod commands;
 mod error;
 mod executor;
+mod output;
+mod parallel;
+mod progress;
+mod watch;
 
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
@@ -47,6 +51,13 @@ fn main() -> Result<()> {
         }
         Commands::Doctor => {
             commands::doctor::run(&ctx)?;
+        }
+        Commands::Watch {
+            target,
+            debounce,
+            path,
+        } => {
+            watch::run(target, debounce, path, &ctx)?;
         }
         Commands::External(args) => {
             let command = args.join(" ");

@@ -3,7 +3,9 @@
 use crate::cli::ExecContext;
 use crate::error::Result;
 use crate::executor::check_tool;
+use crate::output;
 use colored::Colorize;
+use serde::Serialize;
 
 /// Tools to check, grouped by functionality.
 const REQUIRED_TOOLS: &[(&str, &str)] = &[
@@ -21,8 +23,36 @@ const OPTIONAL_TOOLS: &[(&str, &str)] = &[
     ("pre-commit", "Git hooks"),
 ];
 
+/// Tool status for JSON output.
+#[derive(Serialize)]
+struct ToolStatus {
+    name: String,
+    purpose: String,
+    installed: bool,
+    required: bool,
+}
+
+/// File status for JSON output.
+#[derive(Serialize)]
+struct FileStatus {
+    name: String,
+    found: bool,
+}
+
+/// Doctor report for JSON output.
+#[derive(Serialize)]
+struct DoctorReport {
+    tools: Vec<ToolStatus>,
+    files: Vec<FileStatus>,
+    all_required_installed: bool,
+}
+
 /// Execute the doctor command.
-pub fn run(_ctx: &ExecContext) -> Result<()> {
+pub fn run(ctx: &ExecContext) -> Result<()> {
+    if ctx.is_json() {
+        return run_json();
+    }
+
     println!("{}", "rsbuild doctor".bold());
     println!("{}", "=".repeat(50));
     println!();
@@ -86,5 +116,61 @@ pub fn run(_ctx: &ExecContext) -> Result<()> {
         println!("  task:   https://taskfile.dev/installation/");
     }
 
+    Ok(())
+}
+
+/// Run doctor command with JSON output.
+fn run_json() -> Result<()> {
+    let mut tools = Vec::new();
+    let mut all_required_installed = true;
+
+    // Check required tools
+    for (name, purpose) in REQUIRED_TOOLS {
+        let installed = check_tool(name).is_ok();
+        if !installed {
+            all_required_installed = false;
+        }
+        tools.push(ToolStatus {
+            name: name.to_string(),
+            purpose: purpose.to_string(),
+            installed,
+            required: true,
+        });
+    }
+
+    // Check optional tools
+    for (name, purpose) in OPTIONAL_TOOLS {
+        tools.push(ToolStatus {
+            name: name.to_string(),
+            purpose: purpose.to_string(),
+            installed: check_tool(name).is_ok(),
+            required: false,
+        });
+    }
+
+    // Check project files
+    let files_to_check = [
+        ("docker-compose.yml", vec!["docker-compose.yml", "compose.yml"]),
+        ("pyproject.toml", vec!["pyproject.toml", "setup.py"]),
+        ("Cargo.toml", vec!["Cargo.toml"]),
+        ("Taskfile.yml", vec!["Taskfile.yml", "Taskfile.yaml", "taskfile.yml"]),
+        (".pre-commit-config.yaml", vec![".pre-commit-config.yaml"]),
+    ];
+
+    let files: Vec<FileStatus> = files_to_check
+        .iter()
+        .map(|(label, paths)| FileStatus {
+            name: label.to_string(),
+            found: paths.iter().any(|p| std::path::Path::new(p).exists()),
+        })
+        .collect();
+
+    let report = DoctorReport {
+        tools,
+        files,
+        all_required_installed,
+    };
+
+    output::emit_json(&report);
     Ok(())
 }
